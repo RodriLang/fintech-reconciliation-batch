@@ -1,4 +1,8 @@
 package com.portfolio.fintech_reconciliation_batch.enums;
 
-public class TransactionStatus {
+public enum TransactionStatus {
+    PENDING,
+    RECONCILED,
+    FAILED,
+    ERROR
 }
