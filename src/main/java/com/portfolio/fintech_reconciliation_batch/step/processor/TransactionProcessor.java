@@ -4,8 +4,14 @@ import com.portfolio.fintech_reconciliation_batch.entity.TransactionEntity;
 import com.portfolio.fintech_reconciliation_batch.enums.TransactionStatus;
 import com.portfolio.fintech_reconciliation_batch.model.TransactionDocument;
 import com.portfolio.fintech_reconciliation_batch.repository.PlatformTransactionRepository;
+import java.util.ArrayList;
+import java.util.List;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.annotation.BeforeStep;
+import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.batch.core.step.StepExecution;
 import org.springframework.batch.infrastructure.item.ItemProcessor;
 import org.springframework.stereotype.Component;
 
@@ -13,15 +19,30 @@ import java.util.Optional;
 
 @Slf4j
 @Component
+@StepScope
 @RequiredArgsConstructor
 public class TransactionProcessor implements ItemProcessor<TransactionDocument, TransactionDocument> {
 
     private final PlatformTransactionRepository platformTransactionRepository;
+    private StepExecution stepExecution;
+
+    @Getter
+    private final List<String> failedIds = new ArrayList<>();
+
+    @BeforeStep
+    public void saveStepExecution(StepExecution stepExecution) {
+        this.stepExecution = stepExecution;
+    }
 
     @Override
     public TransactionDocument process(TransactionDocument csvTransaction) {
         log.info("Validando transacción desde el CSV: {}", csvTransaction.getTransactionReference());
 
+        try {
+            Thread.sleep(20000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         Optional<TransactionEntity> platformTxnOptional = platformTransactionRepository
                 .findByTransactionReference(csvTransaction.getTransactionReference());
 
@@ -41,6 +62,10 @@ public class TransactionProcessor implements ItemProcessor<TransactionDocument, 
                     csvTransaction.getTransactionReference(),
                     csvTransaction.getAmount(), csvTransaction.getCurrency(),
                     platformTxn.getAmount(), platformTxn.getCurrency());
+
+            failedIds.add(csvTransaction.getTransactionReference());
+
+            stepExecution.getExecutionContext().put("failedIds", new ArrayList<>(failedIds));
 
             csvTransaction.setStatus(TransactionStatus.FAILED);
             return csvTransaction;

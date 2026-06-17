@@ -23,6 +23,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDateTime;
@@ -46,6 +48,17 @@ public class BatchConfig {
 
     @Value("${app.batch.reconciliation.chunkSize}")
     private int chunkSize;
+
+    @Bean
+    public ThreadPoolTaskExecutor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(5);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(25);
+        executor.setThreadNamePrefix("Batch-Thread-");
+        executor.initialize();
+        return executor;
+    }
 
     @Bean
     public FlatFileItemReader<TransactionDocument> reader() {
@@ -80,12 +93,13 @@ public class BatchConfig {
     }
 
     @Bean
-    public Step reconciliationStep(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+    public Step reconciliationStep(JobRepository jobRepository, PlatformTransactionManager transactionManager, ThreadPoolTaskExecutor taskExecutor) {
         return new StepBuilder(RECONCILIATION_STEP_NAME, jobRepository)
                 .<TransactionDocument, TransactionDocument>chunk(chunkSize)
                 .reader(reader())
                 .processor(processor())
                 .writer(writer())
+                .taskExecutor(taskExecutor)
                 .transactionManager(transactionManager)
                 .build();
     }

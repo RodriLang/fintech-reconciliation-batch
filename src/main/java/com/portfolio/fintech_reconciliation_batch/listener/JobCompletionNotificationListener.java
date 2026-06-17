@@ -1,14 +1,15 @@
 package com.portfolio.fintech_reconciliation_batch.listener;
 
+import com.portfolio.fintech_reconciliation_batch.registry.JobExecutionRegistry;
+import com.portfolio.fintech_reconciliation_batch.service.AuditService;
+import java.util.Collection;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.listener.JobExecutionListener;
 import org.springframework.batch.core.job.JobExecution;
-import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Slf4j
@@ -16,32 +17,29 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class JobCompletionNotificationListener implements JobExecutionListener {
 
-    private final ConfigurableApplicationContext context;
-    private LocalDateTime startTime;
+    private final AuditService auditService;
+    private final JobExecutionRegistry jobExecutionRegistry;
 
     @Override
     public void beforeJob(JobExecution jobExecution) {
-        this.startTime = LocalDateTime.now();
+        LocalDateTime startTime = LocalDateTime.now();
         log.info("INICIANDO AUDITORÍA: El Job {} inició a las {}", jobExecution.getJobInstance().getJobName(), startTime);
     }
 
     @Override
     public void afterJob(JobExecution jobExecution) {
-        LocalDateTime endTime = LocalDateTime.now();
-        Duration duration = Duration.between(startTime, endTime);
+        List<String> allFailedIds = jobExecution.getStepExecutions().stream()
+                .map(step -> step.getExecutionContext().get("failedIds"))
+                .filter(obj -> obj instanceof List<?>)
+                .map(obj -> (List<?>) obj)
+                .flatMap(Collection::stream)
+                .filter(item -> item instanceof String)
+                .map(item -> (String) item)
+                .toList();
 
-        log.info("RESUMEN DE EJECUCIÓN DEL JOB");
+        auditService.saveExecutionReport(jobExecution, allFailedIds);
+        jobExecutionRegistry.release();
 
-        log.info("Nombre del Job : {}", jobExecution.getJobInstance().getJobName());
-        log.info("Status Final   : {}", jobExecution.getStatus());
-        log.info("Tiempo Total   : {} ms", duration.toMillis());
-
-        if (jobExecution.getStatus() == BatchStatus.COMPLETED) {
-            log.info("Resultado      : El proceso Batch corrió de principio a fin de manera limpia.");
-            // TODO agregar notificación
-        } else if (jobExecution.getStatus() == BatchStatus.FAILED) {
-            log.error("Resultado      : El proceso BATCH falló técnicamente. Revisar excepciones.");
-        }
-        log.info("==================================================================");
+        log.info("Reporte guardado. Total fallidos: {}", allFailedIds.size());
     }
 }
