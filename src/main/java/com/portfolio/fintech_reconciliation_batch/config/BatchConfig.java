@@ -2,8 +2,9 @@ package com.portfolio.fintech_reconciliation_batch.config;
 
 import com.portfolio.fintech_reconciliation_batch.enums.CurrencyType;
 import com.portfolio.fintech_reconciliation_batch.enums.TransactionStatus;
+import com.portfolio.fintech_reconciliation_batch.listener.JobCompletionNotificationListener;
 import com.portfolio.fintech_reconciliation_batch.model.TransactionDocument;
-import com.portfolio.fintech_reconciliation_batch.processor.TransactionProcessor;
+import com.portfolio.fintech_reconciliation_batch.step.processor.TransactionProcessor;
 import com.portfolio.fintech_reconciliation_batch.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,12 +38,14 @@ public class BatchConfig {
     private final JobCompletionNotificationListener jobListener;
     private final ResourceLoader resourceLoader;
 
+    public static final String RECONCILIATION_JOB_NAME = "reconciliationJob";
+    public static final String RECONCILIATION_STEP_NAME = "reconciliationStep";
+
     @Value("${app.batch.reconciliation.input-file-path}")
     private String inputFilePath;
 
-    public static final String RECONCILIATION_JOB_NAME = "reconciliationJob";
-    public static final String RECONCILIATION_STEP_NAME = "reconciliationStep";
-    private static final int CHUNK_SIZE = 10;
+    @Value("${app.batch.reconciliation.chunkSize}")
+    private int chunkSize;
 
     @Bean
     public FlatFileItemReader<TransactionDocument> reader() {
@@ -79,7 +82,7 @@ public class BatchConfig {
     @Bean
     public Step reconciliationStep(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
         return new StepBuilder(RECONCILIATION_STEP_NAME, jobRepository)
-                .<TransactionDocument, TransactionDocument>chunk(CHUNK_SIZE)
+                .<TransactionDocument, TransactionDocument>chunk(chunkSize)
                 .reader(reader())
                 .processor(processor())
                 .writer(writer())

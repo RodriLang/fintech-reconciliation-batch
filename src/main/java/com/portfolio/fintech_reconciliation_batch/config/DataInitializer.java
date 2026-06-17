@@ -20,32 +20,32 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class DataInitializer implements ApplicationListener<ContextRefreshedEvent> {
 
-    private final PlatformTransactionRepository platformTransactionRepository;
+    private final PlatformTransactionRepository repository;
 
     @Override
     public void onApplicationEvent(@NonNull ContextRefreshedEvent event) {
-        log.info("========================================================");
-        log.info("Cargando datos de prueba en la base de datos SQL (H2)...");
-        log.info("========================================================");
+        log.info("Verificando datos de prueba en la base de datos...");
 
-        platformTransactionRepository.save(TransactionEntity.builder()
-                .transactionReference("TXN-2026-001")
-                .accountId("ACC-1002")
-                .amount(new BigDecimal("1500.00")) // Coincide
-                .currency(CurrencyType.USD)
-                .internalStatus(InternalStatus.PROCESSED)
-                .createdAt(LocalDateTime.now())
-                .build());
+        seedData("TXN-2026-001", "ACC-1002", new BigDecimal("1500.00"), CurrencyType.USD);
+        seedData("TXN-2026-002", "ACC-5541", new BigDecimal("200.00"), CurrencyType.EUR);
 
-        platformTransactionRepository.save(TransactionEntity.builder()
-                .transactionReference("TXN-2026-002")
-                .accountId("ACC-5541")
-                .amount(new BigDecimal("200.00")) // No coincide
-                .currency(CurrencyType.EUR)
-                .internalStatus(InternalStatus.PROCESSED)
-                .createdAt(LocalDateTime.now())
-                .build());
+        log.info("Inicialización de datos completada.");
+    }
 
-        log.info("Datos de prueba SQL inyectados con éxito.");
+    private void seedData(String ref, String account, BigDecimal amount, CurrencyType currency) {
+
+        if (!repository.existsByTransactionReference(ref)) {
+            repository.save(TransactionEntity.builder()
+                    .transactionReference(ref)
+                    .accountId(account)
+                    .amount(amount)
+                    .currency(currency)
+                    .internalStatus(InternalStatus.PROCESSED)
+                    .createdAt(LocalDateTime.now())
+                    .build());
+            log.info("Transacción {} creada.", ref);
+        } else {
+            log.debug("Transacción {} ya existe, omitiendo.", ref);
+        }
     }
 }

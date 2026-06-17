@@ -12,8 +12,8 @@ import java.time.LocalDateTime;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(JobExecutionException.class)
-    public ResponseEntity<ErrorResponse> handleJobExecutionException(JobExecutionException ex) {
+    @ExceptionHandler(ReconciliationException.class)
+    public ResponseEntity<ErrorResponse> handleReconciliationException(ReconciliationException ex) {
         log.warn("GlobalExceptionHandler: Conflicto detectado en la ejecución del Batch -> {}", ex.getMessage());
 
         ErrorResponse errorDto = new ErrorResponse(

@@ -1,4 +1,4 @@
-package com.portfolio.fintech_reconciliation_batch.processor;
+package com.portfolio.fintech_reconciliation_batch.step.processor;
 
 import com.portfolio.fintech_reconciliation_batch.entity.TransactionEntity;
 import com.portfolio.fintech_reconciliation_batch.enums.TransactionStatus;

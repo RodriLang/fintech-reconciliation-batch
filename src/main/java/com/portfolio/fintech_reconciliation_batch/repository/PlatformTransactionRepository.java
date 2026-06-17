@@ -8,5 +8,8 @@ import java.util.Optional;
 
 @Repository
 public interface PlatformTransactionRepository extends JpaRepository<TransactionEntity, Long> {
+
     Optional<TransactionEntity> findByTransactionReference(String transactionReference);
+
+    boolean existsByTransactionReference(String transactionReference);
 }
