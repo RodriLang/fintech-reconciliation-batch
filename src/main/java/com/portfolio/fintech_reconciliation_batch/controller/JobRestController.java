@@ -4,6 +4,7 @@ import com.portfolio.fintech_reconciliation_batch.dto.response.JobResponse;
 import com.portfolio.fintech_reconciliation_batch.service.ReconciliationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,7 +20,7 @@ public class JobRestController {
 
     @PostMapping("/run-reconciliation")
     public ResponseEntity<JobResponse> trigger() {
-        log.info("API REST: Solicitud manual recibida mediante JobOperator.");
-        return ResponseEntity.ok(reconciliationService.runReconciliation());
+        log.info("Solicitud manual recibida. '/run-reconciliation'");
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(reconciliationService.runReconciliation());
     }
 }

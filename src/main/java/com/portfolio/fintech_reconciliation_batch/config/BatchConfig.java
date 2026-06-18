@@ -4,17 +4,18 @@ import com.portfolio.fintech_reconciliation_batch.enums.CurrencyType;
 import com.portfolio.fintech_reconciliation_batch.enums.TransactionStatus;
 import com.portfolio.fintech_reconciliation_batch.listener.JobCompletionNotificationListener;
 import com.portfolio.fintech_reconciliation_batch.model.TransactionDocument;
-import com.portfolio.fintech_reconciliation_batch.step.processor.TransactionProcessor;
+import com.portfolio.fintech_reconciliation_batch.repository.PlatformTransactionRepository;
 import com.portfolio.fintech_reconciliation_batch.repository.TransactionRepository;
+import com.portfolio.fintech_reconciliation_batch.step.processor.TransactionProcessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
+import org.springframework.batch.core.launch.support.JobOperatorFactoryBean;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
-
-import org.springframework.batch.infrastructure.item.ItemProcessor;
 import org.springframework.batch.infrastructure.item.data.RepositoryItemWriter;
 import org.springframework.batch.infrastructure.item.data.builder.RepositoryItemWriterBuilder;
 import org.springframework.batch.infrastructure.item.file.FlatFileItemReader;
@@ -23,7 +24,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ResourceLoader;
-import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -36,7 +36,7 @@ import java.util.Objects;
 public class BatchConfig {
 
     private final TransactionRepository transactionRepository;
-    private final TransactionProcessor transactionProcessor;
+    private final PlatformTransactionRepository platformTransactionRepository;
     private final JobCompletionNotificationListener jobListener;
     private final ResourceLoader resourceLoader;
 
@@ -49,6 +49,16 @@ public class BatchConfig {
     @Value("${app.batch.reconciliation.chunkSize}")
     private int chunkSize;
 
+    @Bean("asyncJobOperator")
+    public JobOperatorFactoryBean jobOperator(
+            JobRepository jobRepository,
+            ThreadPoolTaskExecutor taskExecutor) {
+        JobOperatorFactoryBean factory = new JobOperatorFactoryBean();
+        factory.setJobRepository(jobRepository);
+        factory.setTaskExecutor(taskExecutor);
+        return factory;
+    }
+
     @Bean
     public ThreadPoolTaskExecutor taskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
@@ -58,6 +68,12 @@ public class BatchConfig {
         executor.setThreadNamePrefix("Batch-Thread-");
         executor.initialize();
         return executor;
+    }
+
+    @Bean
+    @StepScope
+    public TransactionProcessor processor() {
+        return new TransactionProcessor(platformTransactionRepository);
     }
 
     @Bean
@@ -80,11 +96,6 @@ public class BatchConfig {
     }
 
     @Bean
-    public ItemProcessor<TransactionDocument, TransactionDocument> processor() {
-        return transactionProcessor;
-    }
-
-    @Bean
     public RepositoryItemWriter<TransactionDocument> writer() {
         return new RepositoryItemWriterBuilder<TransactionDocument>()
                 .repository(transactionRepository)
@@ -93,7 +104,9 @@ public class BatchConfig {
     }
 
     @Bean
-    public Step reconciliationStep(JobRepository jobRepository, PlatformTransactionManager transactionManager, ThreadPoolTaskExecutor taskExecutor) {
+    public Step reconciliationStep(JobRepository jobRepository,
+                                   PlatformTransactionManager transactionManager,
+                                   ThreadPoolTaskExecutor taskExecutor) {
         return new StepBuilder(RECONCILIATION_STEP_NAME, jobRepository)
                 .<TransactionDocument, TransactionDocument>chunk(chunkSize)
                 .reader(reader())

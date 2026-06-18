@@ -2,15 +2,15 @@ package com.portfolio.fintech_reconciliation_batch.listener;
 
 import com.portfolio.fintech_reconciliation_batch.registry.JobExecutionRegistry;
 import com.portfolio.fintech_reconciliation_batch.service.AuditService;
-import java.util.Collection;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.batch.core.listener.JobExecutionListener;
 import org.springframework.batch.core.job.JobExecution;
+import org.springframework.batch.core.listener.JobExecutionListener;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
 
 @Slf4j
 @Component
@@ -28,18 +28,23 @@ public class JobCompletionNotificationListener implements JobExecutionListener {
 
     @Override
     public void afterJob(JobExecution jobExecution) {
-        List<String> allFailedIds = jobExecution.getStepExecutions().stream()
-                .map(step -> step.getExecutionContext().get("failedIds"))
-                .filter(obj -> obj instanceof List<?>)
-                .map(obj -> (List<?>) obj)
-                .flatMap(Collection::stream)
-                .filter(item -> item instanceof String)
-                .map(item -> (String) item)
-                .toList();
 
-        auditService.saveExecutionReport(jobExecution, allFailedIds);
-        jobExecutionRegistry.release();
+        try {
+            List<String> allFailedIds = jobExecution.getStepExecutions().stream()
+                    .map(step -> step.getExecutionContext().get("failedIds"))
+                    .filter(obj -> obj instanceof List<?>)
+                    .map(obj -> (List<?>) obj)
+                    .flatMap(Collection::stream)
+                    .filter(String.class::isInstance)
+                    .map(String.class::cast)
+                    .toList();
 
-        log.info("Reporte guardado. Total fallidos: {}", allFailedIds.size());
+            auditService.saveExecutionReport(jobExecution, allFailedIds);
+
+            log.info("Reporte guardado. Total fallidos: {}", allFailedIds.size());
+
+        } finally {
+            jobExecutionRegistry.release();
+        }
     }
 }

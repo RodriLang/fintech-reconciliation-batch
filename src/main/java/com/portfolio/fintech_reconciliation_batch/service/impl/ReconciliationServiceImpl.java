@@ -4,22 +4,30 @@ import com.portfolio.fintech_reconciliation_batch.dto.response.JobResponse;
 import com.portfolio.fintech_reconciliation_batch.exception.ReconciliationException;
 import com.portfolio.fintech_reconciliation_batch.registry.JobExecutionRegistry;
 import com.portfolio.fintech_reconciliation_batch.service.ReconciliationService;
-import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.job.parameters.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobOperator;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 public class ReconciliationServiceImpl implements ReconciliationService {
 
+    @Qualifier("asyncJobOperator")
     private final JobOperator jobOperator;
     private final Job reconciliationJob;
     private final JobExecutionRegistry jobExecutionRegistry;
+
+    public ReconciliationServiceImpl(
+            @Qualifier("asyncJobOperator") JobOperator jobOperator,
+            Job reconciliationJob,
+            JobExecutionRegistry jobExecutionRegistry) {
+        this.jobOperator = jobOperator;
+        this.reconciliationJob = reconciliationJob;
+        this.jobExecutionRegistry = jobExecutionRegistry;
+    }
 
     @Override
     public JobResponse runReconciliation() {
@@ -37,8 +45,8 @@ public class ReconciliationServiceImpl implements ReconciliationService {
             JobExecution execution = jobOperator.start(reconciliationJob, params);
 
             return new JobResponse(
-                    "SUCCESS",
-                    "El Job de conciliación se ejecutó con éxito.",
+                    "PROCESSING",
+                    "El Job de conciliación fue encolado y comenzó su ejecución en segundo plano.",
                     execution.getId(),
                     execution.getStatus().toString()
             );

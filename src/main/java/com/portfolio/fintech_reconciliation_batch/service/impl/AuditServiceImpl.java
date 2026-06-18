@@ -1,14 +1,16 @@
-package com.portfolio.fintech_reconciliation_batch.service;
+package com.portfolio.fintech_reconciliation_batch.service.impl;
 
 import com.portfolio.fintech_reconciliation_batch.entity.ReconciliationReport;
 import com.portfolio.fintech_reconciliation_batch.repository.ReportRepository;
+import com.portfolio.fintech_reconciliation_batch.service.AuditService;
 import jakarta.transaction.Transactional;
-import java.time.LocalDateTime;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.step.StepExecution;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -24,18 +26,19 @@ public class AuditServiceImpl implements AuditService {
     String summary = failedIds.isEmpty() ? "Sin errores" : "Fallos en: " + failedIds;
 
         long read = jobExecution.getStepExecutions().stream().mapToLong(StepExecution::getReadCount).sum();
-        long write = jobExecution.getStepExecutions().stream().mapToLong(StepExecution::getWriteCount).sum();
-        long skip = jobExecution.getStepExecutions().stream().mapToLong(StepExecution::getWriteSkipCount).sum();
+        long writeTotal = jobExecution.getStepExecutions().stream().mapToLong(StepExecution::getWriteCount).sum();
+
+        long totalFailed = failedIds.size();
+        long totalSuccessful = writeTotal - totalFailed;
 
         ReconciliationReport report = ReconciliationReport.builder()
                 .jobExecutionId(jobExecution.getId())
                 .executionDate(LocalDateTime.now())
                 .status(jobExecution.getStatus().toString())
                 .totalProcessed(read)
-                .successfulCount(write)
-                .failedCount(skip)
+                .successfulCount(writeTotal)
+                .failedCount(totalFailed)
                 .summaryMessage(summary)
-                .summaryMessage("Job terminado con " + write + " éxitos y " + skip + " fallos.")
                 .build();
 
         reportRepository.save(report);

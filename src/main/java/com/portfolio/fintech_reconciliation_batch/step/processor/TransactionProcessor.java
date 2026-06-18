@@ -5,6 +5,7 @@ import com.portfolio.fintech_reconciliation_batch.enums.TransactionStatus;
 import com.portfolio.fintech_reconciliation_batch.model.TransactionDocument;
 import com.portfolio.fintech_reconciliation_batch.repository.PlatformTransactionRepository;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import org.springframework.batch.infrastructure.item.ItemProcessor;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Slf4j
 @Component
@@ -27,11 +29,12 @@ public class TransactionProcessor implements ItemProcessor<TransactionDocument, 
     private StepExecution stepExecution;
 
     @Getter
-    private final List<String> failedIds = new ArrayList<>();
+    private final CopyOnWriteArrayList<String> failedIds = new CopyOnWriteArrayList<>();
 
     @BeforeStep
     public void saveStepExecution(StepExecution stepExecution) {
         this.stepExecution = stepExecution;
+        this.stepExecution.getExecutionContext().put("failedIds", this.failedIds);
     }
 
     @Override
@@ -49,6 +52,7 @@ public class TransactionProcessor implements ItemProcessor<TransactionDocument, 
         if (platformTxnOptional.isEmpty()) {
             log.warn("La transacción {} no existe en la base de datos SQL.", csvTransaction.getTransactionReference());
             csvTransaction.setStatus(TransactionStatus.ERROR);
+            failedIds.add(csvTransaction.getTransactionReference());
             return csvTransaction;
         }
 
@@ -63,11 +67,8 @@ public class TransactionProcessor implements ItemProcessor<TransactionDocument, 
                     csvTransaction.getAmount(), csvTransaction.getCurrency(),
                     platformTxn.getAmount(), platformTxn.getCurrency());
 
-            failedIds.add(csvTransaction.getTransactionReference());
-
-            stepExecution.getExecutionContext().put("failedIds", new ArrayList<>(failedIds));
-
             csvTransaction.setStatus(TransactionStatus.FAILED);
+            failedIds.add(csvTransaction.getTransactionReference());
             return csvTransaction;
         }
 
