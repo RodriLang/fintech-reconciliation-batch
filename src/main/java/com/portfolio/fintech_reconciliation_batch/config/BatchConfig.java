@@ -2,7 +2,6 @@ package com.portfolio.fintech_reconciliation_batch.config;
 
 import com.portfolio.fintech_reconciliation_batch.listener.JobCompletionNotificationListener;
 import com.portfolio.fintech_reconciliation_batch.model.TransactionDocument;
-import com.portfolio.fintech_reconciliation_batch.repository.PlatformTransactionRepository;
 import com.portfolio.fintech_reconciliation_batch.repository.TransactionRepository;
 import com.portfolio.fintech_reconciliation_batch.step.mapper.TransactionFieldSetMapper;
 import com.portfolio.fintech_reconciliation_batch.step.processor.TransactionProcessor;
@@ -28,7 +27,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 public class BatchConfig {
 
     private final TransactionRepository transactionRepository;
-    private final PlatformTransactionRepository platformTransactionRepository;
     private final JobCompletionNotificationListener jobListener;
     private final ResourceLoader resourceLoader;
     private final TransactionFieldSetMapper fieldSetMapper;
@@ -41,12 +39,6 @@ public class BatchConfig {
 
     @Value("${app.batch.reconciliation.chunkSize}")
     private int chunkSize;
-
-    @Bean
-    @StepScope
-    public TransactionProcessor processor() {
-        return new TransactionProcessor(platformTransactionRepository);
-    }
 
     @Bean
     @StepScope
@@ -70,11 +62,12 @@ public class BatchConfig {
     @Bean
     public Step reconciliationStep(JobRepository jobRepository,
             PlatformTransactionManager transactionManager,
-            ThreadPoolTaskExecutor taskExecutor) {
+            ThreadPoolTaskExecutor taskExecutor,
+            TransactionProcessor processor) {
         return new StepBuilder(RECONCILIATION_STEP_NAME, jobRepository)
                 .<TransactionDocument, TransactionDocument>chunk(chunkSize)
                 .reader(reader())
-                .processor(processor())
+                .processor(processor)
                 .writer(writer())
                 .taskExecutor(taskExecutor)
                 .transactionManager(transactionManager)
