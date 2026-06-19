@@ -40,42 +40,42 @@ El resultado de este proceso es la clasificación de cada transacción como `REC
 │                        ARRANQUE DE LA APP                           │
 │                                                                     │
 │   DataInitializer                                                   │
-│   ├── Puebla H2 (SQL) con ~4.750 TransactionEntity                 │
-│   └── Genera transactions.csv con 5.000 filas                      │
-│       └── ~250 filas con errores deliberados (5%)                  │
-│           ├── Discrepancia de monto (+$10.00)                      │
-│           ├── Transacción huérfana en CSV                          │
-│           └── Transacción huérfana en H2                           │
+│   ├── Puebla H2 (SQL) con ~4.750 TransactionEntity                  │
+│   └── Genera transactions.csv con 5.000 filas                       │
+│       └── ~250 filas con errores deliberados (5%)                   │
+│           ├── Discrepancia de monto (+$10.00)                       │
+│           ├── Transacción huérfana en CSV                           │
+│           └── Transacción huérfana en H2                            │
 └────────────────────────────┬────────────────────────────────────────┘
                              │ POST /api/v1/jobs/run-reconciliation
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                   SPRING BATCH — reconciliationJob                  │
 │                                                                     │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │               reconciliationStep (multihilo)                 │  │
-│  │                                                              │  │
-│  │  [beforeStep]                                                │  │
-│  │   └── SELECT * FROM platform_transactions → ConcurrentHashMap│  │
-│  │                                                              │  │
-│  │  FlatFileItemReader ──► TransactionProcessor ──► ItemWriter  │  │
-│  │  (lee CSV por chunks)    (cruza vs. caché)     (Bulk Insert) │  │
-│  │                           ├── RECONCILED                     │  │
-│  │                           └── ERROR → failedIds[]            │  │
-│  └──────────────────────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │               reconciliationStep (multihilo)                  │  │
+│  │                                                               │  │
+│  │  [beforeStep]                                                 │  │
+│  │   └── SELECT * FROM platform_transactions → ConcurrentHashMap │  │
+│  │                                                               │  │
+│  │  FlatFileItemReader ──► TransactionProcessor ──► ItemWriter   │  │
+│  │  (lee CSV por chunks)    (cruza vs. caché)     (Bulk Insert)  │  │
+│  │                           ├── RECONCILED                      │  │
+│  │                           └── ERROR → failedIds[]             │  │
+│  └───────────────────────────────────────────────────────────────┘  │
 │                                                                     │
 │  [afterJob]                                                         │
-│   └── AuditService → ReconciliationReport → H2 (SQL)               │
+│   └── AuditService → ReconciliationReport → H2 (SQL)                │
 └────────────────────────────┬────────────────────────────────────────┘
                              │ Resultados conciliados
                              ▼
-               ┌─────────────────────────┐
-               │   MongoDB Atlas (Cloud) │
-               │   Collection: transactions│
-               │   ~5.000 documentos     │
-               │   {status: RECONCILED   │
-               │    o status: ERROR}     │
-               └─────────────────────────┘
+               ┌─────────────────────────────┐
+               │   MongoDB Atlas (Cloud)     │
+               │   Collection: transactions  │
+               │   ~5.000 documentos         │
+               │   {status: RECONCILED       │
+               │    o status: ERROR}         │
+               └─────────────────────────────┘
 ```
 
 ### Persistencia Híbrida (Políglota)
@@ -84,8 +84,10 @@ El sistema utiliza dos motores de base de datos con roles bien diferenciados:
 
 | Motor | Rol | Justificación |
 |---|---|---|
-| **H2 (SQL, archivo local)** | Datos transaccionales core y metadatos del batch | Necesita transacciones ACID, esquema fijo, joins y el repositorio de estado de Spring Batch |
+| **PostgreSQL / MySQL** *(H2 en este proyecto)* | Datos transaccionales core y metadatos del batch | Necesita transacciones ACID, esquema fijo, joins y el repositorio de estado de Spring Batch |
 | **MongoDB Atlas (NoSQL, nube)** | Documentos conciliados y reportes analíticos | Los resultados son documentos semi-estructurados que pueden variar por entidad bancaria; NoSQL permite escalar sin migraciones de esquema |
+
+> **Nota sobre H2:** En este proyecto se utiliza H2 en modo archivo como base SQL por simplicidad y portabilidad: no requiere instalar ni configurar un servidor externo, lo que facilita clonar y ejecutar el proyecto directamente. En un entorno de producción real, H2 sería reemplazado por **PostgreSQL** (opción recomendada por su robustez en cargas concurrentes) o **MySQL**. El cambio es transparente para la aplicación: basta con reemplazar el driver y la URL de conexión en `application.properties`, ya que toda la capa de persistencia está abstraída mediante JPA/Hibernate.
 
 ---
 
@@ -306,6 +308,25 @@ El repositorio es seguro para hacer público sin riesgo de exponer credenciales 
 - Java 25
 - Maven 3.9+
 - Cuenta en MongoDB Atlas con un cluster activo y un usuario de base de datos creado
+- **No se requiere instalar ningún servidor SQL**: este proyecto usa H2 en modo archivo, que se crea automáticamente en `./data/fintech_db` al iniciar la aplicación.
+
+#### Migración a PostgreSQL o MySQL (producción)
+
+Para apuntar a una base SQL real, reemplazar en `application.properties`:
+
+```properties
+# PostgreSQL
+spring.datasource.url=jdbc:postgresql://localhost:5432/fintech_db
+spring.datasource.username=${DB_USER}
+spring.datasource.password=${DB_PASSWORD}
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# MySQL
+# spring.datasource.url=jdbc:mysql://localhost:3306/fintech_db
+# spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+```
+
+Y agregar la dependencia correspondiente en `pom.xml`. El resto de la aplicación no requiere ningún cambio gracias a la abstracción de JPA/Hibernate.
 
 ### Variables de Entorno
 
