@@ -1,23 +1,19 @@
 package com.portfolio.fintech_reconciliation_batch.config;
 
-import com.portfolio.fintech_reconciliation_batch.enums.CurrencyType;
-import com.portfolio.fintech_reconciliation_batch.enums.TransactionStatus;
 import com.portfolio.fintech_reconciliation_batch.listener.JobCompletionNotificationListener;
 import com.portfolio.fintech_reconciliation_batch.model.TransactionDocument;
 import com.portfolio.fintech_reconciliation_batch.repository.PlatformTransactionRepository;
 import com.portfolio.fintech_reconciliation_batch.repository.TransactionRepository;
+import com.portfolio.fintech_reconciliation_batch.step.mapper.TransactionFieldSetMapper;
 import com.portfolio.fintech_reconciliation_batch.step.processor.TransactionProcessor;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
-import org.springframework.batch.core.launch.support.JobOperatorFactoryBean;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.batch.infrastructure.item.data.RepositoryItemWriter;
-import org.springframework.batch.infrastructure.item.data.builder.RepositoryItemWriterBuilder;
+import org.springframework.batch.infrastructure.item.ItemWriter;
 import org.springframework.batch.infrastructure.item.file.FlatFileItemReader;
 import org.springframework.batch.infrastructure.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,10 +23,6 @@ import org.springframework.core.io.ResourceLoader;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
-import java.time.LocalDateTime;
-import java.util.Objects;
-
-@Slf4j
 @Configuration
 @RequiredArgsConstructor
 public class BatchConfig {
@@ -39,6 +31,7 @@ public class BatchConfig {
     private final PlatformTransactionRepository platformTransactionRepository;
     private final JobCompletionNotificationListener jobListener;
     private final ResourceLoader resourceLoader;
+    private final TransactionFieldSetMapper fieldSetMapper;
 
     public static final String RECONCILIATION_JOB_NAME = "reconciliationJob";
     public static final String RECONCILIATION_STEP_NAME = "reconciliationStep";
@@ -49,27 +42,6 @@ public class BatchConfig {
     @Value("${app.batch.reconciliation.chunkSize}")
     private int chunkSize;
 
-    @Bean("asyncJobOperator")
-    public JobOperatorFactoryBean jobOperator(
-            JobRepository jobRepository,
-            ThreadPoolTaskExecutor taskExecutor) {
-        JobOperatorFactoryBean factory = new JobOperatorFactoryBean();
-        factory.setJobRepository(jobRepository);
-        factory.setTaskExecutor(taskExecutor);
-        return factory;
-    }
-
-    @Bean
-    public ThreadPoolTaskExecutor taskExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(5);
-        executor.setMaxPoolSize(10);
-        executor.setQueueCapacity(25);
-        executor.setThreadNamePrefix("Batch-Thread-");
-        executor.initialize();
-        return executor;
-    }
-
     @Bean
     @StepScope
     public TransactionProcessor processor() {
@@ -77,6 +49,7 @@ public class BatchConfig {
     }
 
     @Bean
+    @StepScope
     public FlatFileItemReader<TransactionDocument> reader() {
         return new FlatFileItemReaderBuilder<TransactionDocument>()
                 .name("transactionCsvReader")
@@ -84,29 +57,20 @@ public class BatchConfig {
                 .linesToSkip(1)
                 .delimited()
                 .names("transactionReference", "accountId", "amount", "currency", "transactionDate")
-                .fieldSetMapper(fieldSet -> TransactionDocument.builder()
-                        .transactionReference(fieldSet.readString("transactionReference"))
-                        .accountId(fieldSet.readString("accountId"))
-                        .amount(fieldSet.readBigDecimal("amount"))
-                        .currency(CurrencyType.valueOf(Objects.requireNonNull(fieldSet.readString("currency")).toUpperCase()))
-                        .status(TransactionStatus.PENDING)
-                        .transactionDate(LocalDateTime.parse(Objects.requireNonNull(fieldSet.readString("transactionDate"))))
-                        .build())
+                .fieldSetMapper(fieldSetMapper)
                 .build();
     }
 
     @Bean
-    public RepositoryItemWriter<TransactionDocument> writer() {
-        return new RepositoryItemWriterBuilder<TransactionDocument>()
-                .repository(transactionRepository)
-                .methodName("save")
-                .build();
+    public ItemWriter<TransactionDocument> writer() {
+        return chunk -> transactionRepository.insert(chunk.getItems());
+
     }
 
     @Bean
     public Step reconciliationStep(JobRepository jobRepository,
-                                   PlatformTransactionManager transactionManager,
-                                   ThreadPoolTaskExecutor taskExecutor) {
+            PlatformTransactionManager transactionManager,
+            ThreadPoolTaskExecutor taskExecutor) {
         return new StepBuilder(RECONCILIATION_STEP_NAME, jobRepository)
                 .<TransactionDocument, TransactionDocument>chunk(chunkSize)
                 .reader(reader())

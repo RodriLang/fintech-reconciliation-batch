@@ -1,5 +1,6 @@
 package com.portfolio.fintech_reconciliation_batch.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -35,5 +36,6 @@ public class ReconciliationReport {
 
     private long failedCount;
 
+    @Column(name = "summary_message", columnDefinition = "TEXT")
     private String summaryMessage;
 }

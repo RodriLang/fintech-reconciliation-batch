@@ -25,10 +25,15 @@ public class TransactionDocument {
     private String id;
 
     private String transactionReference;
+
     private String accountId;
+
     private BigDecimal amount;
+
     private CurrencyType currency;
+
     private TransactionStatus status;
+
     private LocalDateTime transactionDate;
 
 }
