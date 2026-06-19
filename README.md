@@ -262,7 +262,7 @@ El sistema se autoregula sin necesidad de mecanismos externos. El estado final s
 
 ### Cuello de Botella 5 — Desbordamiento de Datos en Reportes (Truncation Error)
 
-**Problema:** Al finalizar el job, el `AuditService` persiste en H2 un `ReconciliationReport` cuyo campo `summaryMessage` contiene la lista completa de los IDs con errores. Con ~170 referencias del formato `TXN-2026-XXXXX`, el string superaba los **2.000 caracteres**. El tipo `VARCHAR(255)` por defecto de JPA arrojaba un `DataException` de truncación, impidiendo guardar el reporte de auditoría.
+**Problema:** Al finalizar el job, el `AuditService` persiste en SQL un `ReconciliationReport` cuyo campo `summaryMessage` contiene la lista completa de los IDs con errores. Con ~170 referencias del formato `TXN-2026-XXXXX`, el string superaba los **2.000 caracteres**. El tipo `VARCHAR(255)` por defecto de JPA arrojaba un `DataException` de truncación, impidiendo guardar el reporte de auditoría.
 
 **Solución:** Anotación `@Column(columnDefinition = "TEXT")` en la entidad:
 
@@ -271,7 +271,7 @@ El sistema se autoregula sin necesidad de mecanismos externos. El estado final s
 private String summaryMessage;
 ```
 
-`TEXT` en H2 (equivalente a `CLOB`) almacena strings de longitud arbitraria. Los reportes de auditoría financiera son por naturaleza dinámicos: a mayor volumen de errores, mayor el mensaje. Hardcodear un límite numérico sería una deuda técnica garantizada.
+`TEXT` en SQL (equivalente a `CLOB`) almacena strings de longitud arbitraria. Los reportes de auditoría financiera son por naturaleza dinámicos: a mayor volumen de errores, mayor el mensaje. Hardcodear un límite numérico sería una deuda técnica garantizada.
 
 **Nota sobre contadores de auditoría:** El cálculo de `successfulCount` y `failedCount` en `AuditServiceImpl` utiliza contadores atómicos propios (`AtomicLong`) mantenidos directamente en `TransactionProcessor` y expuestos vía `ExecutionContext`, en lugar de inferir los valores desde el `writeCount` de Spring Batch. Esta decisión desacopla la auditoría de los internos del framework: si en el futuro se agrega un `SkipPolicy`, el `writeCount` cambia de semántica mientras que los contadores propios siguen siendo la fuente de verdad exacta.
 
